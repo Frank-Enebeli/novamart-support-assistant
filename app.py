@@ -17,6 +17,7 @@ from src.assistant import (
 from src.document_loader import (
     extract_text_from_bytes,
     get_category,
+    load_documents,
 )
 
 from src.feedback import (
@@ -24,8 +25,10 @@ from src.feedback import (
     save_feedback,
 )
 
-from src.ingestion import ingest_document
-
+from src.ingestion import (
+    ingest_all_documents,
+    ingest_document,
+)
 from src.validation import (
     validate_question,
     validate_upload,
@@ -45,6 +48,62 @@ st.set_page_config(
     layout="centered",
 )
 
+def ensure_knowledge_base():
+    """
+    Ensure the bundled NovaMart documents are indexed.
+
+    This is especially important in cloud deployments
+    where the local Chroma directory may begin empty.
+    """
+
+    documents = load_documents()
+
+    expected_sources = {
+        document["source"]
+        for document in documents
+    }
+
+    indexed_sources = set(
+        get_document_sources()
+    )
+
+    missing_sources = (
+        expected_sources
+        - indexed_sources
+    )
+
+    if not missing_sources:
+        return
+
+    try:
+        ingest_all_documents(
+            force=False
+        )
+
+    except Exception:
+        st.error(
+            "The NovaMart knowledge base "
+            "could not be initialized."
+        )
+
+        st.stop()
+
+    indexed_sources = set(
+        get_document_sources()
+    )
+
+    still_missing = (
+        expected_sources
+        - indexed_sources
+    )
+
+    if still_missing:
+        st.error(
+            "Some NovaMart knowledge-base "
+            "documents could not be indexed."
+        )
+
+        st.stop()
 
 def initialize_session_state():
     """
@@ -708,6 +767,9 @@ def admin_page():
 
 def main():
     initialize_session_state()
+
+    ensure_knowledge_base()
+
 
     st.sidebar.title(
         "NovaMart"
