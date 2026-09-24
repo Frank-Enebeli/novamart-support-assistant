@@ -1,0 +1,29 @@
+# Secrets
+.env
+
+# Virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Local ChromaDB
+data/chroma/
+
+# Local customer feedback
+data/feedback/*.json
+data/feedback/*.jsonl
+data/feedback/*.csv
+
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# Editor / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
