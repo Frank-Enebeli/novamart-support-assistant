@@ -1,4 +1,10 @@
 import uuid
+import hmac
+import os
+
+from dotenv import load_dotenv
+
+load_dotenv()
 from pathlib import Path
 
 import streamlit as st
@@ -47,6 +53,58 @@ st.set_page_config(
     page_icon="🛍️",
     layout="centered",
 )
+
+MAX_LOGIN_ATTEMPTS = 5
+
+
+def get_admin_password():
+    try:
+        return st.secrets["ADMIN_PASSWORD"]
+    except Exception:
+        return os.getenv("ADMIN_PASSWORD")
+
+
+def require_admin():
+    expected = get_admin_password()
+
+    if not expected:
+        st.error(
+            "Admin access is disabled because no "
+            "ADMIN_PASSWORD has been configured."
+        )
+        return False
+
+    if st.session_state.get("admin_authenticated"):
+        return True
+
+    attempts = st.session_state.get("admin_failed_attempts", 0)
+
+    if attempts >= MAX_LOGIN_ATTEMPTS:
+        st.error("Too many failed attempts. Please try again later.")
+        return False
+
+    with st.form("admin_login"):
+        entered = st.text_input("Admin password", type="password")
+        submitted = st.form_submit_button("Log in")
+
+    if submitted:
+        if hmac.compare_digest(
+            entered.encode("utf-8"),
+            expected.encode("utf-8"),
+        ):
+            st.session_state["admin_authenticated"] = True
+            st.session_state["admin_failed_attempts"] = 0
+            st.rerun()
+        else:
+            st.session_state["admin_failed_attempts"] = attempts + 1
+            st.error("Incorrect password.")
+
+    return False
+
+
+def ensure_admin():
+    if not st.session_state.get("admin_authenticated"):
+        raise PermissionError("Administrator access is required.")
 
 def ensure_knowledge_base():
     """
@@ -559,14 +617,20 @@ def admin_page():
     Simple administrator knowledge-base page.
     """
 
-    st.title(
-        "⚙️ NovaMart Knowledge Base Admin"
-    )
+    
 
-    st.warning(
-        "This project admin area is separated from "
-        "the customer interface but does not include "
-        "production-grade authentication."
+    st.title("⚙️ NovaMart Knowledge Base Admin")
+
+    if not require_admin():
+        return
+
+    if st.button("Log out"):
+        st.session_state["admin_authenticated"] = False
+        st.rerun()
+
+    st.caption(
+        "This area is protected by a shared admin password. "
+        "A production system would use individual accounts."
     )
 
     st.subheader(
@@ -646,6 +710,7 @@ def admin_page():
             ):
                 result = (
                     process_uploaded_document(
+                        ensure_admin(),
                         uploaded_file,
                         replace_existing=(
                             replace_existing
@@ -704,6 +769,7 @@ def admin_page():
             disabled=not confirm_delete,
         ):
             try:
+                ensure_admin(),
                 delete_document(
                     selected_source
                 )
